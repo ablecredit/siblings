@@ -6,3 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow                = "1"
+db                    = { git = "https://github.com/xAmbit-ai/db-rs.git", branch = "main" }
+log                   = "0"
+pretty_env_logger     = "0"
+serde                 = { version= "1", features= ["derive"] }
+serde_derive          = "1"
+serde_json            = "1"
+tokio                 = { version= "1", default-features= false, features= ["rt-multi-thread", "signal", "parking_lot", "time"] }
