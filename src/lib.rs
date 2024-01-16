@@ -11,9 +11,9 @@ use tokio::sync::RwLock;
 extern crate log;
 
 #[derive(Clone)]
-pub struct Siblings<'a> {
+pub struct Siblings {
     db: Arc<Db>,
-    me: Option<&'a str>, // define who is me - this has to be the template code
+    me: Option<String>, // define who is me - this has to be the template code
     endpoints: Arc<RwLock<Endpoints>>,
 }
 
@@ -73,10 +73,10 @@ impl RegionEndpoint {
     }
 }
 
-impl<'a> Siblings<'a> {
-    pub fn new(db: Arc<Db>, me: Option<&'a str>) -> Self {
+impl Siblings {
+    pub fn new(db: Arc<Db>, me: Option<&str>) -> Self {
         Self {
-            me,
+            me: me.map(|s| s.to_string()),
             db,
             endpoints: Arc::new(RwLock::new(Endpoints::default())),
         }
@@ -235,7 +235,7 @@ impl<'a> Siblings<'a> {
     }
 
     pub async fn me(&self, region: Option<&str>) -> Option<String> {
-        if let Some(me) = self.me {
+        if let Some(me) = &self.me {
             self.siblings(me, region).await
         } else {
             None
