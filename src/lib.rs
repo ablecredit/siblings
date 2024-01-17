@@ -1,6 +1,6 @@
 #![feature(let_chains)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 
 use anyhow::Result;
 use db::Db;
@@ -75,11 +75,26 @@ impl RegionEndpoint {
 
 impl Siblings {
     pub fn new(db: Arc<Db>, me: Option<&str>) -> Self {
+        if let Ok(env) = env::var("X_ENV")
+            && &env != "prod"
+        {
+            return Self::for_local(db, me);
+        }
         Self {
             me: me.map(|s| s.to_string()),
             db,
             endpoints: Arc::new(RwLock::new(Endpoints::default())),
         }
+    }
+
+    fn for_local(db: Arc<Db>, me: Option<&str>) -> Self {
+        let mut slf = Self {
+            me: me.map(|s| s.to_string()),
+            db,
+            endpoints: Arc::new(RwLock::new(Endpoints::default())),
+        };
+
+        slf
     }
 
     pub async fn august(&self, region: Option<&str>) -> Option<String> {
