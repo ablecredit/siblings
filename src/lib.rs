@@ -1,6 +1,6 @@
 #![feature(let_chains)]
 
-use std::{collections::HashMap, env, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 use db::Db;
@@ -74,11 +74,9 @@ impl RegionEndpoint {
 }
 
 impl Siblings {
-    pub fn new(db: Arc<Db>, me: Option<&str>) -> Self {
-        if let Ok(env) = env::var("X_ENV")
-            && &env != "prod"
-        {
-            return Self::for_local(db, me);
+    pub async fn new(db: Arc<Db>, me: Option<&str>, dev: bool) -> Self {
+        if dev {
+            return Self::for_local(db, me).await;
         }
         Self {
             me: me.map(|s| s.to_string()),
@@ -87,12 +85,62 @@ impl Siblings {
         }
     }
 
-    fn for_local(db: Arc<Db>, me: Option<&str>) -> Self {
-        let mut slf = Self {
+    async fn for_local(db: Arc<Db>, me: Option<&str>) -> Self {
+        let slf = Self {
             me: me.map(|s| s.to_string()),
             db,
             endpoints: Arc::new(RwLock::new(Endpoints::default())),
         };
+
+        for item in dotenvy::from_filename_iter("svc.env").unwrap() {
+            let (key, val) = item.unwrap();
+            if &key == "matrix" {
+                let mut w = slf.endpoints.write().await;
+                w.matrix = Some(RegionEndpoint {
+                    default: format!("http://localhost:{val}"),
+                    ..Default::default()
+                });
+            } else if &key == "pandora" {
+                let mut w = slf.endpoints.write().await;
+                w.pandora = Some(RegionEndpoint {
+                    default: format!("http://localhost:{val}"),
+                    ..Default::default()
+                });
+            } else if &key == "schematron" {
+                let mut w = slf.endpoints.write().await;
+                w.schematron = Some(RegionEndpoint {
+                    default: format!("http://localhost:{val}"),
+                    ..Default::default()
+                });
+            } else if &key == "sentry" {
+                let mut w = slf.endpoints.write().await;
+                w.sentry = Some(RegionEndpoint {
+                    default: format!("http://localhost:{val}"),
+                    ..Default::default()
+                });
+            } else if &key == "thumbnailer" {
+                let mut w = slf.endpoints.write().await;
+                w.thumbnailer = Some(RegionEndpoint {
+                    default: format!("http://localhost:{val}"),
+                    ..Default::default()
+                });
+            } else if &key == "xchange" {
+                let mut w = slf.endpoints.write().await;
+                w.xchange = Some(RegionEndpoint {
+                    default: format!("http://localhost:{val}"),
+                    ..Default::default()
+                });
+            } else {
+                let mut w = slf.endpoints.write().await;
+                w.siblings.insert(
+                    key,
+                    RegionEndpoint {
+                        default: format!("http://localhost:{val}"),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
 
         slf
     }
@@ -274,10 +322,12 @@ mod tests {
 
     use std::{collections::HashMap, env, fs::read_to_string};
 
+    use anyhow::Result;
+
     use crate::Siblings;
 
     #[tokio::test]
-    async fn load() -> anyhow::Result<()> {
+    async fn load() -> Result<()> {
         pretty_env_logger::init();
 
         let db = crate::Db::new(env::var("X_PROJECT")?.as_str()).await?;
@@ -294,9 +344,9 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn check() -> anyhow::Result<()> {
+    async fn check() -> Result<()> {
         let db = std::sync::Arc::new(crate::Db::new(env::var("X_PROJECT")?.as_str()).await?);
-        let sib = Siblings::new(db, None);
+        let sib = Siblings::new(db, None, false).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
             read_to_string("siblings.json")?.as_str(),
@@ -363,6 +413,37 @@ mod tests {
         assert_eq!(
             sib.xchange(Some("IN")).await.as_ref(),
             data.get("xchange").unwrap().get("default")
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn check_local() -> Result<()> {
+        let db = std::sync::Arc::new(crate::Db::new(env::var("X_PROJECT")?.as_str()).await?);
+        let sib = Siblings::new(db, None, true).await;
+
+        let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
+            read_to_string("siblings.json")?.as_str(),
+        )?;
+
+        assert_eq!(
+            sib.august(Some("IN")).await.as_ref(),
+            data.get("august").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.siblings("bank-statement", Some("IN")).await.as_ref(),
+            data.get("bank-statement").unwrap().get("in")
+        );
+        assert_eq!(
+            sib.siblings("bankstat", Some("IN")).await.as_ref(),
+            data.get("bankstat").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.siblings("credit", Some("IN")).await.as_ref(),
+            Some(&"http://localhost:8080".to_string())
         );
 
         Ok(())
