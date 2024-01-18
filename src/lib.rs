@@ -56,20 +56,12 @@ impl RegionEndpoint {
     pub fn get(&self, region: Option<Regions>) -> Option<String> {
         if let Some(region) = region {
             match region {
-                Regions::US => {
-                    if let Some(us) = &self.usa {
-                        return Some(us.clone());
-                    }
-                }
-                Regions::IN => {
-                    if let Some(ind) = &self.ind {
-                        return Some(ind.clone());
-                    }
-                }
+                Regions::US => self.usa.clone(),
+                Regions::IN => self.ind.clone(),
             }
+        } else {
+            Some(self.default.clone())
         }
-
-        Some(self.default.to_owned())
     }
 }
 
