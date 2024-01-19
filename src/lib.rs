@@ -56,12 +56,20 @@ impl RegionEndpoint {
     pub fn get(&self, region: Option<Regions>) -> Option<String> {
         if let Some(region) = region {
             match region {
-                Regions::US => self.usa.clone(),
-                Regions::IN => self.ind.clone(),
+                Regions::US => {
+                    if self.usa.is_some() {
+                        return self.usa.clone();
+                    }
+                }
+                Regions::IN => {
+                    if self.ind.is_some() {
+                        return self.ind.clone();
+                    }
+                }
             }
-        } else {
-            Some(self.default.clone())
         }
+
+        Some(self.default.clone())
     }
 }
 
@@ -413,7 +421,7 @@ mod tests {
     #[tokio::test]
     async fn check_local() -> Result<()> {
         let db = std::sync::Arc::new(crate::Db::new(env::var("X_PROJECT")?.as_str()).await?);
-        let sib = Siblings::new(db, None, true).await;
+        let sib = Siblings::new(db.clone(), None, true).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
             read_to_string("siblings.json")?.as_str(),
@@ -435,6 +443,15 @@ mod tests {
 
         assert_eq!(
             sib.siblings("credit", Some("IN")).await.as_ref(),
+            Some(&"http://localhost:8080".to_string())
+        );
+
+        let sib = Siblings::new(db, Some("credit"), true).await;
+
+        assert_eq!(sib.me, Some("credit".to_string()));
+
+        assert_eq!(
+            sib.me(Some("IN")).await.as_ref(),
             Some(&"http://localhost:8080".to_string())
         );
 
