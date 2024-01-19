@@ -92,7 +92,13 @@ impl Siblings {
             endpoints: Arc::new(RwLock::new(Endpoints::default())),
         };
 
-        for item in dotenvy::from_filename_iter("svc.env").unwrap() {
+        let f_iter = if let Ok(i) = dotenvy::from_filename_iter("svc.env") {
+            i
+        } else {
+            return slf;
+        };
+
+        for item in f_iter {
             let (key, val) = item.unwrap();
             if &key == "matrix" {
                 let mut w = slf.endpoints.write().await;
@@ -132,6 +138,8 @@ impl Siblings {
                 });
             } else {
                 let mut w = slf.endpoints.write().await;
+                let key = key.split('_').collect::<Vec<_>>().join("-");
+
                 w.siblings.insert(
                     key,
                     RegionEndpoint {
