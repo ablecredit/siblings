@@ -12,7 +12,7 @@ extern crate log;
 
 #[derive(Clone)]
 pub struct Siblings {
-    db: Arc<Db>,
+    db: Arc<db::RedisPool>,
     me: Option<String>, // define who is me - this has to be the template code
     endpoints: Arc<RwLock<Endpoints>>,
 }
@@ -74,7 +74,7 @@ impl RegionEndpoint {
 }
 
 impl Siblings {
-    pub async fn new(db: Arc<Db>, me: Option<&str>, dev: bool) -> Self {
+    pub async fn new(db: Arc<db::RedisPool>, me: Option<&str>, dev: bool) -> Self {
         if dev {
             return Self::for_local(db, me).await;
         }
@@ -85,7 +85,7 @@ impl Siblings {
         }
     }
 
-    async fn for_local(db: Arc<Db>, me: Option<&str>) -> Self {
+    async fn for_local(db: Arc<db::RedisPool>, me: Option<&str>) -> Self {
         let slf = Self {
             me: me.map(|s| s.to_string()),
             db,
@@ -153,13 +153,17 @@ impl Siblings {
         slf
     }
 
+    async fn get_cache(&self, key: &str) -> Result<Vec<u8>> {
+        Db::get_cache_for_pool(self.db.clone(), key).await
+    }
+
     pub async fn august(&self, region: Option<&str>) -> Option<String> {
         let region = region.map(|r| r.into());
         if let Some(august) = &self.endpoints.read().await.august {
             return august.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-august").await
+        if let Ok(c) = self.get_cache("ep-august").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -178,7 +182,7 @@ impl Siblings {
             return matrix.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-matrix").await
+        if let Ok(c) = self.get_cache("ep-matrix").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -197,7 +201,7 @@ impl Siblings {
             return pandora.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-pandora").await
+        if let Ok(c) = self.get_cache("ep-pandora").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -216,7 +220,7 @@ impl Siblings {
             return schematron.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-schematron").await
+        if let Ok(c) = self.get_cache("ep-schematron").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -235,7 +239,7 @@ impl Siblings {
             return sentry.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-sentry").await
+        if let Ok(c) = self.get_cache("ep-sentry").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -254,7 +258,7 @@ impl Siblings {
             return thumb.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-thumbnailer").await
+        if let Ok(c) = self.get_cache("ep-thumbnailer").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -273,7 +277,7 @@ impl Siblings {
             return x.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache("ep-xchange").await
+        if let Ok(c) = self.get_cache("ep-xchange").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -292,7 +296,7 @@ impl Siblings {
             return siblingmap.get(region);
         }
 
-        if let Ok(c) = self.db.get_cache(format!("ep-{sibling}").as_str()).await
+        if let Ok(c) = self.get_cache(format!("ep-{sibling}").as_str()).await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -353,7 +357,9 @@ mod tests {
 
     #[tokio::test]
     async fn check() -> Result<()> {
-        let db = std::sync::Arc::new(crate::Db::new(env::var("X_PROJECT")?.as_str()).await?);
+        let db = std::sync::Arc::new(
+            crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
+        );
         let sib = Siblings::new(db, None, false).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
@@ -428,7 +434,9 @@ mod tests {
 
     #[tokio::test]
     async fn check_local() -> Result<()> {
-        let db = std::sync::Arc::new(crate::Db::new(env::var("X_PROJECT")?.as_str()).await?);
+        let db = std::sync::Arc::new(
+            crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
+        );
         let sib = Siblings::new(db.clone(), None, true).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
