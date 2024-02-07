@@ -372,7 +372,7 @@ mod tests {
     use crate::Siblings;
 
     #[tokio::test]
-    async fn check() -> Result<()> {
+    async fn check_prod() -> Result<()> {
         let db = std::sync::Arc::new(
             crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
         );
