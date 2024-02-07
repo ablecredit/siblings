@@ -1,6 +1,6 @@
 #![feature(let_chains)]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, env, sync::Arc};
 
 use anyhow::Result;
 use db::Db;
@@ -14,6 +14,7 @@ extern crate log;
 pub struct Siblings {
     db: Arc<db::RedisPool>,
     me: Option<String>, // define who is me - this has to be the template code
+    env: Env,
     endpoints: Arc<RwLock<Endpoints>>,
 }
 
@@ -30,6 +31,30 @@ impl From<&str> for Regions {
             "US" | "USA" => Self::US,
             _ => panic!("Region {value} not supported"),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Env {
+    Prod,
+    Dev
+}
+
+impl Env {
+    pub fn new_from_env() -> Self {
+        env::var("X_ENV").map_or(
+            Self::Dev,
+            |env| {
+                let env = env.to_lowercase();
+                if &env == "prod" {
+                    Self::Prod
+                } else if &env == "dev" {
+                    Self::Dev
+                } else {
+                    panic!("Siblings: invalid env: {env}");
+                }
+            } 
+        )
     }
 }
 
@@ -74,13 +99,14 @@ impl RegionEndpoint {
 }
 
 impl Siblings {
-    pub async fn new(db: Arc<db::RedisPool>, me: Option<&str>, dev: bool) -> Self {
-        if dev {
+    pub async fn new(db: Arc<db::RedisPool>, me: Option<&str>) -> Self {
+        if env::var("X_LOCAL").map_or(false, |x| x == "TRUE") {
             return Self::for_local(db, me).await;
         }
         Self {
             me: me.map(|s| s.to_string()),
             db,
+            env: Env::new_from_env(),
             endpoints: Arc::new(RwLock::new(Endpoints::default())),
         }
     }
@@ -89,6 +115,7 @@ impl Siblings {
         let slf = Self {
             me: me.map(|s| s.to_string()),
             db,
+            env: Env::new_from_env(),
             endpoints: Arc::new(RwLock::new(Endpoints::default())),
         };
 
@@ -154,7 +181,13 @@ impl Siblings {
     }
 
     async fn get_cache(&self, key: &str) -> Result<Vec<u8>> {
-        Db::get_cache_for_pool(self.db.clone(), key).await
+        // Appends `dev` if target environment is dev
+        let key = if self.env == Env::Dev {
+            format!("dev-{key}")
+        } else {
+            key.to_string()
+        };
+        Db::get_cache_for_pool(self.db.clone(), &key).await
     }
 
     pub async fn august(&self, region: Option<&str>) -> Option<String> {
@@ -290,7 +323,7 @@ impl Siblings {
         None
     }
 
-    pub async fn siblings(&self, sibling: &str, region: Option<&str>) -> Option<String> {
+    pub async fn sibling(&self, sibling: &str, region: Option<&str>) -> Option<String> {
         let region = region.map(|r| r.into());
         if let Some(siblingmap) = self.endpoints.read().await.siblings.get(sibling) {
             return siblingmap.get(region);
@@ -311,7 +344,7 @@ impl Siblings {
 
     pub async fn me(&self, region: Option<&str>) -> Option<String> {
         if let Some(me) = &self.me {
-            self.siblings(me, region).await
+            self.sibling(me, region).await
         } else {
             None
         }
@@ -339,28 +372,11 @@ mod tests {
     use crate::Siblings;
 
     #[tokio::test]
-    async fn load() -> Result<()> {
-        pretty_env_logger::init();
-
-        let db = crate::Db::new(env::var("X_PROJECT")?.as_str()).await?;
-        let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
-            read_to_string("siblings.json")?.as_str(),
-        )?;
-
-        for (k, v) in data.iter() {
-            let b = serde_json::to_vec(v)?;
-            db.set_cache(format!("ep-{k}").as_str(), &b[..], None)
-                .await?;
-        }
-        Ok(())
-    }
-
-    #[tokio::test]
     async fn check() -> Result<()> {
         let db = std::sync::Arc::new(
             crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
         );
-        let sib = Siblings::new(db, None, false).await;
+        let sib = Siblings::new(db, None).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
             read_to_string("siblings.json")?.as_str(),
@@ -372,30 +388,30 @@ mod tests {
         );
 
         assert_eq!(
-            sib.siblings("bank-statement", Some("IN")).await.as_ref(),
+            sib.sibling("bank-statement", Some("IN")).await.as_ref(),
             data.get("bank-statement").unwrap().get("in")
         );
         assert_eq!(
-            sib.siblings("bankstat", Some("IN")).await.as_ref(),
+            sib.sibling("bankstat", Some("IN")).await.as_ref(),
             data.get("bankstat").unwrap().get("in")
         );
 
         assert_eq!(
-            sib.siblings("credit", Some("IN")).await.as_ref(),
+            sib.sibling("credit", Some("IN")).await.as_ref(),
             data.get("credit").unwrap().get("in")
         );
 
         assert_eq!(
-            sib.siblings("finance-statement", Some("IN")).await.as_ref(),
+            sib.sibling("finance-statement", Some("IN")).await.as_ref(),
             data.get("finance-statement").unwrap().get("in")
         );
         assert_eq!(
-            sib.siblings("finsta", Some("IN")).await.as_ref(),
+            sib.sibling("finsta", Some("IN")).await.as_ref(),
             data.get("finsta").unwrap().get("in")
         );
 
         assert_eq!(
-            sib.siblings("gstr", Some("IN")).await.as_ref(),
+            sib.sibling("gstr", Some("IN")).await.as_ref(),
             data.get("gstr").unwrap().get("in")
         );
 
@@ -437,7 +453,7 @@ mod tests {
         let db = std::sync::Arc::new(
             crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
         );
-        let sib = Siblings::new(db.clone(), None, true).await;
+        let sib = Siblings::new(db.clone(), None).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
             read_to_string("siblings.json")?.as_str(),
@@ -449,20 +465,20 @@ mod tests {
         );
 
         assert_eq!(
-            sib.siblings("bank-statement", Some("IN")).await.as_ref(),
+            sib.sibling("bank-statement", Some("IN")).await.as_ref(),
             data.get("bank-statement").unwrap().get("in")
         );
         assert_eq!(
-            sib.siblings("bankstat", Some("IN")).await.as_ref(),
+            sib.sibling("bankstat", Some("IN")).await.as_ref(),
             data.get("bankstat").unwrap().get("in")
         );
 
         assert_eq!(
-            sib.siblings("credit", Some("IN")).await.as_ref(),
+            sib.sibling("credit", Some("IN")).await.as_ref(),
             Some(&"http://localhost:8080".to_string())
         );
 
-        let sib = Siblings::new(db, Some("credit"), true).await;
+        let sib = Siblings::new(db, Some("credit")).await;
 
         assert_eq!(sib.me, Some("credit".to_string()));
 
