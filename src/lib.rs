@@ -37,24 +37,21 @@ impl From<&str> for Regions {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Env {
     Prod,
-    Dev
+    Dev,
 }
 
 impl Env {
     pub fn new_from_env() -> Self {
-        env::var("X_ENV").map_or(
-            Self::Dev,
-            |env| {
-                let env = env.to_lowercase();
-                if &env == "prod" {
-                    Self::Prod
-                } else if &env == "dev" {
-                    Self::Dev
-                } else {
-                    panic!("Siblings: invalid env: {env}");
-                }
-            } 
-        )
+        env::var("X_ENV").map_or(Self::Dev, |env| {
+            let env = env.to_lowercase();
+            if &env == "prod" {
+                Self::Prod
+            } else if &env == "dev" {
+                Self::Dev
+            } else {
+                panic!("Siblings: invalid env: {env}");
+            }
+        })
     }
 }
 
@@ -187,6 +184,7 @@ impl Siblings {
         } else {
             key.to_string()
         };
+        info!("get_cache.key:  {key}");
         Db::get_cache_for_pool(self.db.clone(), &key).await
     }
 
@@ -376,6 +374,87 @@ mod tests {
         let db = std::sync::Arc::new(
             crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
         );
+        let sib = Siblings::new(db, None).await;
+
+        let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
+            read_to_string("siblings.json")?.as_str(),
+        )?;
+
+        assert_eq!(
+            sib.august(Some("IN")).await.as_ref(),
+            data.get("august").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.sibling("bank-statement", Some("IN")).await.as_ref(),
+            data.get("bank-statement").unwrap().get("in")
+        );
+        assert_eq!(
+            sib.sibling("bankstat", Some("IN")).await.as_ref(),
+            data.get("bankstat").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.sibling("credit", Some("IN")).await.as_ref(),
+            data.get("credit").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.sibling("finance-statement", Some("IN")).await.as_ref(),
+            data.get("finance-statement").unwrap().get("in")
+        );
+        assert_eq!(
+            sib.sibling("finsta", Some("IN")).await.as_ref(),
+            data.get("finsta").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.sibling("gstr", Some("IN")).await.as_ref(),
+            data.get("gstr").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.matrix(Some("IN")).await.as_ref(),
+            data.get("matrix").unwrap().get("default")
+        );
+
+        assert_eq!(
+            sib.pandora(Some("IN")).await.as_ref(),
+            data.get("pandora").unwrap().get("default")
+        );
+
+        assert_eq!(
+            sib.schematron(Some("IN")).await.as_ref(),
+            data.get("schematron").unwrap().get("default")
+        );
+
+        assert_eq!(
+            sib.sentry(Some("IN")).await.as_ref(),
+            data.get("sentry").unwrap().get("default")
+        );
+
+        assert_eq!(
+            sib.thumbnailer(Some("IN")).await.as_ref(),
+            data.get("thumbnailer").unwrap().get("in")
+        );
+
+        assert_eq!(
+            sib.xchange(Some("IN")).await.as_ref(),
+            data.get("xchange").unwrap().get("default")
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn check_dev() -> Result<()> {
+        pretty_env_logger::init();
+
+        let db = std::sync::Arc::new(
+            crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), true).await?,
+        );
+        env::set_var("X_ENV", "dev");
+
         let sib = Siblings::new(db, None).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(

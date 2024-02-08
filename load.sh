@@ -20,4 +20,4 @@ else
 fi
 
 gcloud storage cp gs://$BUCKET/$SIBLINGS_FILE $SIBLINGS_FILE
-X_PROJECT=$1 X_ENV=prod RUST_LOG=info cargo run --bin siblings-cli --release -- --nocapture
+X_PROJECT=$1 X_ENV=$BUILD RUST_LOG=info cargo run --bin siblings-cli --release -- --nocapture
