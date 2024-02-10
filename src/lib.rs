@@ -348,6 +348,11 @@ impl Siblings {
         }
     }
 
+    pub async fn flush(&self) {
+        let mut ep = self.endpoints.write().await;
+        *ep = Endpoints::default();
+    }
+
     fn deserialize(data: Vec<u8>) -> Result<RegionEndpoint> {
         let ep: HashMap<String, String> = serde_json::from_slice(&data[..])?;
 
