@@ -57,6 +57,7 @@ impl Env {
 
 #[derive(Debug, Clone, Default)]
 pub struct Endpoints {
+    k9: Option<RegionEndpoint>,
     august: Option<RegionEndpoint>,
     matrix: Option<RegionEndpoint>,
     pandora: Option<RegionEndpoint>,
@@ -124,53 +125,37 @@ impl Siblings {
 
         for item in f_iter {
             let (key, val) = item.unwrap();
-            if &key == "matrix" {
+            let endpoint = RegionEndpoint {
+                default: format!("http://localhost:{val}"),
+                ..Default::default()
+            };
+
+            if &key == "k9" {
                 let mut w = slf.endpoints.write().await;
-                w.matrix = Some(RegionEndpoint {
-                    default: format!("http://localhost:{val}"),
-                    ..Default::default()
-                });
+                w.k9 = Some(endpoint);
+            } else if &key == "matrix" {
+                let mut w = slf.endpoints.write().await;
+                w.matrix = Some(endpoint);
             } else if &key == "pandora" {
                 let mut w = slf.endpoints.write().await;
-                w.pandora = Some(RegionEndpoint {
-                    default: format!("http://localhost:{val}"),
-                    ..Default::default()
-                });
+                w.pandora = Some(endpoint);
             } else if &key == "schematron" {
                 let mut w = slf.endpoints.write().await;
-                w.schematron = Some(RegionEndpoint {
-                    default: format!("http://localhost:{val}"),
-                    ..Default::default()
-                });
+                w.schematron = Some(endpoint);
             } else if &key == "sentry" {
                 let mut w = slf.endpoints.write().await;
-                w.sentry = Some(RegionEndpoint {
-                    default: format!("http://localhost:{val}"),
-                    ..Default::default()
-                });
+                w.sentry = Some(endpoint);
             } else if &key == "thumbnailer" {
                 let mut w = slf.endpoints.write().await;
-                w.thumbnailer = Some(RegionEndpoint {
-                    default: format!("http://localhost:{val}"),
-                    ..Default::default()
-                });
+                w.thumbnailer = Some(endpoint);
             } else if &key == "xchange" {
                 let mut w = slf.endpoints.write().await;
-                w.xchange = Some(RegionEndpoint {
-                    default: format!("http://localhost:{val}"),
-                    ..Default::default()
-                });
+                w.xchange = Some(endpoint);
             } else {
                 let mut w = slf.endpoints.write().await;
                 let key = key.split('_').collect::<Vec<_>>().join("-");
 
-                w.siblings.insert(
-                    key,
-                    RegionEndpoint {
-                        default: format!("http://localhost:{val}"),
-                        ..Default::default()
-                    },
-                );
+                w.siblings.insert(key, endpoint);
             }
         }
 
@@ -204,6 +189,25 @@ impl Siblings {
         }
 
         warn!("august: endpoint not found and was not fetched!");
+        None
+    }
+
+    pub async fn k9(&self, region: Option<&str>) -> Option<String> {
+        let region = region.map(|r| r.into());
+        if let Some(k9) = &self.endpoints.read().await.k9 {
+            return k9.get(region);
+        }
+
+        if let Ok(c) = self.get_cache("ep-matrix").await
+            && let Ok(ep) = Self::deserialize(c)
+        {
+            let mut w = self.endpoints.write().await;
+            w.k9 = Some(ep.clone());
+
+            return ep.get(region);
+        }
+
+        warn!("k9: endpoint not found and was not fetched!");
         None
     }
 
@@ -377,7 +381,7 @@ mod tests {
     #[tokio::test]
     async fn check_prod() -> Result<()> {
         let db = std::sync::Arc::new(
-            crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
+            crate::Db::connect_redis(false).await?,
         );
         let sib = Siblings::new(db, None).await;
 
@@ -456,7 +460,7 @@ mod tests {
         pretty_env_logger::init();
 
         let db = std::sync::Arc::new(
-            crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), true).await?,
+            crate::Db::connect_redis(true).await?,
         );
         env::set_var("X_ENV", "dev");
 
@@ -535,7 +539,7 @@ mod tests {
     #[tokio::test]
     async fn check_local() -> Result<()> {
         let db = std::sync::Arc::new(
-            crate::Db::connect_redis(env::var("X_PROJECT")?.as_str(), false).await?,
+            crate::Db::connect_redis(false).await?,
         );
         let sib = Siblings::new(db.clone(), None).await;
 

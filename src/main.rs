@@ -15,7 +15,7 @@ async fn load() -> Result<()> {
 
     info!("Loading data for {}", if isdev { "dev" } else { "prod" });
 
-    let db = db::Db::new(env::var("X_PROJECT")?.as_str()).await?;
+    let db = db::Db::new().await?;
     let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
         read_to_string(if isdev {
             "siblings-dev.json"
