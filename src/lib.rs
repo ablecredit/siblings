@@ -58,6 +58,7 @@ impl Env {
 #[derive(Debug, Clone, Default)]
 pub struct Endpoints {
     august: Option<RegionEndpoint>,
+    bankstatement: Option<RegionEndpoint>,
     k9: Option<RegionEndpoint>,
     matrix: Option<RegionEndpoint>,
     pandora: Option<RegionEndpoint>,
@@ -130,8 +131,10 @@ impl Siblings {
                 default: format!("http://localhost:{val}"),
                 ..Default::default()
             };
-
-            if &key == "k9" {
+            if &key == "bank-statement" {
+                let mut w = slf.endpoints.write().await;
+                w.bankstatement = Some(endpoint);
+            } else if &key == "k9" {
                 let mut w = slf.endpoints.write().await;
                 w.k9 = Some(endpoint);
             } else if &key == "matrix" {
@@ -140,6 +143,9 @@ impl Siblings {
             } else if &key == "pandora" {
                 let mut w = slf.endpoints.write().await;
                 w.pandora = Some(endpoint);
+            } else if key == "retina" {
+                let mut w = slf.endpoints.write().await;
+                w.retina = Some(endpoint);
             } else if &key == "schematron" {
                 let mut w = slf.endpoints.write().await;
                 w.schematron = Some(endpoint);
@@ -223,6 +229,25 @@ impl Siblings {
         {
             let mut w = self.endpoints.write().await;
             w.retina = Some(ep.clone());
+
+            return ep.get(region);
+        }
+
+        warn!("retina: endpoint not found and was not fetched!");
+        None
+    }
+
+    pub async fn bankstatement(&self, region: Option<&str>) -> Option<String> {
+        let region = region.map(|r| r.into());
+        if let Some(bs) = &self.endpoints.read().await.bankstatement {
+            return bs.get(region);
+        }
+
+        if let Ok(c) = self.get_cache("ep-bank-statement").await
+            && let Ok(ep) = Self::deserialize(c)
+        {
+            let mut w = self.endpoints.write().await;
+            w.bankstatement = Some(ep.clone());
 
             return ep.get(region);
         }
