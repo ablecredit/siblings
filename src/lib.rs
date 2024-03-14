@@ -198,7 +198,7 @@ impl Siblings {
             return k9.get(region);
         }
 
-        if let Ok(c) = self.get_cache("ep-matrix").await
+        if let Ok(c) = self.get_cache("ep-k9").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
@@ -380,9 +380,7 @@ mod tests {
 
     #[tokio::test]
     async fn check_prod() -> Result<()> {
-        let db = std::sync::Arc::new(
-            crate::Db::connect_redis(false).await?,
-        );
+        let db = std::sync::Arc::new(crate::Db::connect_redis(false).await?);
         let sib = Siblings::new(db, None).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
@@ -459,9 +457,7 @@ mod tests {
     async fn check_dev() -> Result<()> {
         pretty_env_logger::init();
 
-        let db = std::sync::Arc::new(
-            crate::Db::connect_redis(true).await?,
-        );
+        let db = std::sync::Arc::new(crate::Db::connect_redis(true).await?);
         env::set_var("X_ENV", "dev");
 
         let sib = Siblings::new(db, None).await;
@@ -538,9 +534,7 @@ mod tests {
 
     #[tokio::test]
     async fn check_local() -> Result<()> {
-        let db = std::sync::Arc::new(
-            crate::Db::connect_redis(false).await?,
-        );
+        let db = std::sync::Arc::new(crate::Db::connect_redis(false).await?);
         let sib = Siblings::new(db.clone(), None).await;
 
         let data = serde_json::from_str::<HashMap<String, HashMap<String, String>>>(
