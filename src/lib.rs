@@ -57,10 +57,11 @@ impl Env {
 
 #[derive(Debug, Clone, Default)]
 pub struct Endpoints {
-    k9: Option<RegionEndpoint>,
     august: Option<RegionEndpoint>,
+    k9: Option<RegionEndpoint>,
     matrix: Option<RegionEndpoint>,
     pandora: Option<RegionEndpoint>,
+    retina: Option<RegionEndpoint>,
     schematron: Option<RegionEndpoint>,
     sentry: Option<RegionEndpoint>,
     siblings: HashMap<String, RegionEndpoint>,
@@ -208,6 +209,25 @@ impl Siblings {
         }
 
         warn!("k9: endpoint not found and was not fetched!");
+        None
+    }
+
+    pub async fn retina(&self, region: Option<&str>) -> Option<String> {
+        let region = region.map(|r| r.into());
+        if let Some(k9) = &self.endpoints.read().await.k9 {
+            return k9.get(region);
+        }
+
+        if let Ok(c) = self.get_cache("ep-retina").await
+            && let Ok(ep) = Self::deserialize(c)
+        {
+            let mut w = self.endpoints.write().await;
+            w.retina = Some(ep.clone());
+
+            return ep.get(region);
+        }
+
+        warn!("retina: endpoint not found and was not fetched!");
         None
     }
 
