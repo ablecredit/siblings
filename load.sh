@@ -1,8 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT=$1
-BUILD=$2
+BUILD=$1
 
 if [[ "$BUILD" = 'prod' ]]
 then
@@ -19,5 +18,5 @@ else
     exit
 fi
 
-gcloud storage cp gs://$BUCKET/$SIBLINGS_FILE $SIBLINGS_FILE
-X_PROJECT=$1 X_ENV=$BUILD RUST_LOG=info cargo run --bin siblings-cli --release -- --nocapture
+# gcloud storage cp gs://$BUCKET/$SIBLINGS_FILE $SIBLINGS_FILE
+X_ENV=$BUILD RUST_LOG=info cargo run --bin siblings-cli --release -- --nocapture
