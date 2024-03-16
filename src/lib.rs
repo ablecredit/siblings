@@ -131,7 +131,7 @@ impl Siblings {
                 default: format!("http://localhost:{val}"),
                 ..Default::default()
             };
-            if &key == "bank-statement" {
+            if &key == "bank_statement" {
                 let mut w = slf.endpoints.write().await;
                 w.bankstatement = Some(endpoint);
             } else if &key == "k9" {
