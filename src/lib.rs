@@ -59,6 +59,7 @@ impl Env {
 pub struct Endpoints {
     august: Option<RegionEndpoint>,
     bankstatement: Option<RegionEndpoint>,
+    gst: Option<RegionEndpoint>,
     k9: Option<RegionEndpoint>,
     matrix: Option<RegionEndpoint>,
     pandora: Option<RegionEndpoint>,
@@ -137,6 +138,9 @@ impl Siblings {
             } else if &key == "k9" {
                 let mut w = slf.endpoints.write().await;
                 w.k9 = Some(endpoint);
+            } else if &key == "gst" {
+                let mut w = slf.endpoints.write().await;
+                w.gst = Some(endpoint);
             } else if &key == "matrix" {
                 let mut w = slf.endpoints.write().await;
                 w.matrix = Some(endpoint);
@@ -215,6 +219,25 @@ impl Siblings {
         }
 
         warn!("k9: endpoint not found and was not fetched!");
+        None
+    }
+
+    pub async fn gst(&self, region: Option<&str>) -> Option<String> {
+        let region = region.map(|r| r.into());
+        if let Some(gst) = &self.endpoints.read().await.gst {
+            return gst.get(region);
+        }
+
+        if let Ok(c) = self.get_cache("ep-gst").await
+            && let Ok(ep) = Self::deserialize(c)
+        {
+            let mut w = self.endpoints.write().await;
+            w.gst = Some(ep.clone());
+
+            return ep.get(region);
+        }
+
+        warn!("gst: endpoint not found and was not fetched!");
         None
     }
 
