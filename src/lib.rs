@@ -59,6 +59,7 @@ impl Env {
 pub struct Endpoints {
     august: Option<RegionEndpoint>,
     bankstatement: Option<RegionEndpoint>,
+    bureau: Option<RegionEndpoint>,
     gst: Option<RegionEndpoint>,
     k9: Option<RegionEndpoint>,
     matrix: Option<RegionEndpoint>,
@@ -135,6 +136,9 @@ impl Siblings {
             if &key == "bank_statement" {
                 let mut w = slf.endpoints.write().await;
                 w.bankstatement = Some(endpoint);
+            } else if &key == "bureau" {
+                let mut w = slf.endpoints.write().await;
+                w.bureau = Some(endpoint);
             } else if &key == "k9" {
                 let mut w = slf.endpoints.write().await;
                 w.k9 = Some(endpoint);
@@ -203,22 +207,41 @@ impl Siblings {
         None
     }
 
-    pub async fn k9(&self, region: Option<&str>) -> Option<String> {
+    pub async fn bankstatement(&self, region: Option<&str>) -> Option<String> {
         let region = region.map(|r| r.into());
-        if let Some(k9) = &self.endpoints.read().await.k9 {
-            return k9.get(region);
+        if let Some(bs) = &self.endpoints.read().await.bankstatement {
+            return bs.get(region);
         }
 
-        if let Ok(c) = self.get_cache("ep-k9").await
+        if let Ok(c) = self.get_cache("ep-bank-statement").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
-            w.k9 = Some(ep.clone());
+            w.bankstatement = Some(ep.clone());
 
             return ep.get(region);
         }
 
-        warn!("k9: endpoint not found and was not fetched!");
+        warn!("bankstatement: endpoint not found and was not fetched!");
+        None
+    }
+
+    pub async fn bureau(&self, region: Option<&str>) -> Option<String> {
+        let region = region.map(|r| r.into());
+        if let Some(bs) = &self.endpoints.read().await.bankstatement {
+            return bs.get(region);
+        }
+
+        if let Ok(c) = self.get_cache("ep-bureau").await
+            && let Ok(ep) = Self::deserialize(c)
+        {
+            let mut w = self.endpoints.write().await;
+            w.bureau = Some(ep.clone());
+
+            return ep.get(region);
+        }
+
+        warn!("bureau: endpoint not found and was not fetched!");
         None
     }
 
@@ -241,41 +264,22 @@ impl Siblings {
         None
     }
 
-    pub async fn retina(&self, region: Option<&str>) -> Option<String> {
+    pub async fn k9(&self, region: Option<&str>) -> Option<String> {
         let region = region.map(|r| r.into());
         if let Some(k9) = &self.endpoints.read().await.k9 {
             return k9.get(region);
         }
 
-        if let Ok(c) = self.get_cache("ep-retina").await
+        if let Ok(c) = self.get_cache("ep-k9").await
             && let Ok(ep) = Self::deserialize(c)
         {
             let mut w = self.endpoints.write().await;
-            w.retina = Some(ep.clone());
+            w.k9 = Some(ep.clone());
 
             return ep.get(region);
         }
 
-        warn!("retina: endpoint not found and was not fetched!");
-        None
-    }
-
-    pub async fn bankstatement(&self, region: Option<&str>) -> Option<String> {
-        let region = region.map(|r| r.into());
-        if let Some(bs) = &self.endpoints.read().await.bankstatement {
-            return bs.get(region);
-        }
-
-        if let Ok(c) = self.get_cache("ep-bank-statement").await
-            && let Ok(ep) = Self::deserialize(c)
-        {
-            let mut w = self.endpoints.write().await;
-            w.bankstatement = Some(ep.clone());
-
-            return ep.get(region);
-        }
-
-        warn!("retina: endpoint not found and was not fetched!");
+        warn!("k9: endpoint not found and was not fetched!");
         None
     }
 
@@ -314,6 +318,25 @@ impl Siblings {
         }
 
         warn!("pandora: endpoint not found and was not fetched!");
+        None
+    }
+
+    pub async fn retina(&self, region: Option<&str>) -> Option<String> {
+        let region = region.map(|r| r.into());
+        if let Some(k9) = &self.endpoints.read().await.k9 {
+            return k9.get(region);
+        }
+
+        if let Ok(c) = self.get_cache("ep-retina").await
+            && let Ok(ep) = Self::deserialize(c)
+        {
+            let mut w = self.endpoints.write().await;
+            w.retina = Some(ep.clone());
+
+            return ep.get(region);
+        }
+
+        warn!("retina: endpoint not found and was not fetched!");
         None
     }
 
