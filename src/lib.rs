@@ -228,7 +228,7 @@ impl Siblings {
 
     pub async fn bureau(&self, region: Option<&str>) -> Option<String> {
         let region = region.map(|r| r.into());
-        if let Some(bs) = &self.endpoints.read().await.bankstatement {
+        if let Some(bs) = &self.endpoints.read().await.bureau {
             return bs.get(region);
         }
 
